@@ -17,6 +17,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <Logger.h>
+#include <new>
 #include "display/Gif.h"
 #include "display/DisplayManager.h"
 #include <Arduino_GFX_Library.h>
@@ -53,7 +55,17 @@ Gif::~Gif() {
  */
 auto Gif::begin() -> bool {
     if (m_gif == nullptr) {
-        m_gif = new AnimatedGIF();
+        // The decoder is ~24 KB and the ESP8266 has ~26 KB of heap free at idle. A plain `new` does not return nullptr
+        // on failure (the constructor then memsets through a null pointer: StoreProhibited exception, reboot), so check
+        // the largest free block first and use nothrow new. Keep headroom for the web server's own buffers.
+        static constexpr uint32_t GIF_HEAP_HEADROOM = 4096U;
+        if (EspClass::getMaxFreeBlockSize() < sizeof(AnimatedGIF) + GIF_HEAP_HEADROOM) {
+            Logger::warn("Not enough free heap for the GIF decoder, refusing to play", "Gif");
+
+            return false;
+        }
+
+        m_gif = new (std::nothrow) AnimatedGIF();
 
         if (m_gif == nullptr) {
             return false;

@@ -25,6 +25,8 @@
 #include "web/Webserver.h"
 #include "web/Api.h"
 #include "project_version.h"
+
+static constexpr size_t DISPLAY_FRAME_MAX_WIDTH = 240;  // widest row we buffer (the panel is 240x240)
 #include "display/DisplayManager.h"
 
 #include "config/ConfigManager.h"
@@ -161,6 +163,12 @@ void registerApiEndpoints(Webserver* webserver) {
     // responses=200:application/json,401:application/json
     webserver->raw().on("/api/v1/system", HTTP_GET, [webserver]() { handleSystemInfo(webserver); });
 
+    // @openapi {post} /display/frame version=v1 group=Display summary="Stream raw RGB565 pixels to the display (x,y,w,h query)"
+    // requiresAuth=true responses=200:application/json,400:application/json,401:application/json
+    webserver->raw().on(
+        "/api/v1/display/frame", HTTP_POST, [webserver]() { handleDisplayFrameDone(webserver); },
+        [webserver]() { handleDisplayFrame(webserver); });
+
     // @openapi {post} /token/save version=v1 group=Authentication summary="Save a new bearer token" requiresAuth=true
     // requestBody=application/json requestBodySchema=token:string example={"token":"your_secure_token_value"}
     // responses=200:application/json,401:application/json,400:application/json
@@ -295,6 +303,116 @@ void handleSystemInfo(Webserver* webserver) {
 
     setCorsHeaders(webserver);
     webserver->raw().send(HTTP_CODE_OK, "application/json", json);
+}
+
+namespace {
+// State for the streaming frame upload. Pixels arrive as raw RGB565 words (little-endian, i.e. native uint16_t on the
+// ESP8266) in row-major order and are written to the display one row at a time, so no frame buffer is needed.
+struct FrameState {
+    bool authorized = false;
+    bool error = false;
+    int16_t x = 0;
+    int16_t y = 0;
+    uint16_t w = 0;
+    uint16_t h = 0;
+    uint16_t row = 0;      // rows fully drawn so far
+    size_t rowFill = 0;    // bytes currently in rowBuf
+    uint16_t rowBuf[DISPLAY_FRAME_MAX_WIDTH];
+};
+FrameState g_frame;
+}  // namespace
+
+/**
+ * @brief Streaming upload of raw RGB565 pixels (multipart field with any name). Query: x, y, w, h (default: full screen).
+ * Uses ~480 bytes of RAM (one row), unlike GIF decoding which needs ~25 KB that the ESP8266 does not have to spare.
+ */
+void handleDisplayFrame(Webserver* webserver) {
+    HTTPUpload& upload = webserver->raw().upload();
+    Arduino_GFX* gfx = DisplayManager::getGfx();
+
+    if (upload.status == UPLOAD_FILE_START) {
+        g_frame.authorized = validateBearerToken(webserver);
+        g_frame.error = !g_frame.authorized || gfx == nullptr;
+        g_frame.row = 0;
+        g_frame.rowFill = 0;
+
+        if (g_frame.error) {
+            return;
+        }
+
+        auto argInt = [webserver](const char* name, long def) -> long {
+            return webserver->raw().hasArg(name) ? webserver->raw().arg(name).toInt() : def;
+        };
+        const long screenW = gfx->width();
+        const long screenH = gfx->height();
+        long fx = argInt("x", 0);
+        long fy = argInt("y", 0);
+        long fw = argInt("w", screenW);
+        long fh = argInt("h", screenH);
+
+        if (fx < 0 || fy < 0 || fw <= 0 || fh <= 0 || fx + fw > screenW || fy + fh > screenH ||
+            fw > static_cast<long>(DISPLAY_FRAME_MAX_WIDTH)) {
+            g_frame.error = true;
+            return;
+        }
+
+        g_frame.x = static_cast<int16_t>(fx);
+        g_frame.y = static_cast<int16_t>(fy);
+        g_frame.w = static_cast<uint16_t>(fw);
+        g_frame.h = static_cast<uint16_t>(fh);
+        DisplayManager::stopGif();  // do not fight a running GIF for the display
+        return;
+    }
+
+    if (upload.status != UPLOAD_FILE_WRITE || g_frame.error || gfx == nullptr) {
+        return;
+    }
+
+    auto* rowBytes = reinterpret_cast<uint8_t*>(g_frame.rowBuf);
+    const size_t rowSize = static_cast<size_t>(g_frame.w) * 2U;
+    size_t pos = 0;
+
+    while (pos < upload.currentSize && g_frame.row < g_frame.h) {
+        const size_t take = min(rowSize - g_frame.rowFill, static_cast<size_t>(upload.currentSize) - pos);
+        memcpy(rowBytes + g_frame.rowFill, upload.buf + pos, take);
+        g_frame.rowFill += take;
+        pos += take;
+
+        if (g_frame.rowFill == rowSize) {
+            gfx->draw16bitRGBBitmap(g_frame.x, static_cast<int16_t>(g_frame.y + g_frame.row), g_frame.rowBuf,
+                                    static_cast<int16_t>(g_frame.w), 1);
+            g_frame.row++;
+            g_frame.rowFill = 0;
+        }
+    }
+}
+
+/**
+ * @brief Response for the frame upload (runs after the whole body has been streamed)
+ */
+void handleDisplayFrameDone(Webserver* webserver) {
+    JsonDocument doc;
+    int code = HTTP_CODE_OK;
+
+    if (!g_frame.authorized) {
+        doc["status"] = "error";
+        doc["message"] = "Invalid or missing token";
+        code = HTTP_CODE_UNAUTHORIZED;
+        Logger::warn(("Unauthorized frame upload from " + webserver->raw().client().remoteIP().toString()).c_str(), "API");
+    } else if (g_frame.error) {
+        doc["status"] = "error";
+        doc["message"] = "Bad x/y/w/h (must fit the screen; w <= 240)";
+        code = HTTP_CODE_BAD_REQUEST;
+    } else {
+        doc["status"] = g_frame.row == g_frame.h ? "ok" : "partial";
+        doc["rows"] = g_frame.row;
+        doc["expectedRows"] = g_frame.h;
+    }
+
+    String json;
+    serializeJson(doc, json);
+    setCorsHeaders(webserver);
+    webserver->raw().send(code, "application/json", json);
 }
 
 /**
