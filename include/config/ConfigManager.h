@@ -62,6 +62,11 @@ class ConfigManager {
     SecureStorage secure;
     uint8_t lcd_rotation = 4;
     std::string ntp_server;
+    std::string tz = "MST7MDT,M3.2.0,M11.1.0";  // POSIX TZ string (default: Mountain time with DST)
+    float weather_lat = 39.7294F;               // default: Aurora, CO
+    float weather_lon = -104.8319F;
+    std::string screen_order = "clock,weather";
+    uint16_t screen_secs = 20;                  // seconds each native screen stays up
 
     const char* getNtpServer() const { return ntp_server.c_str(); }
     void setNtpServer(const char* s) {

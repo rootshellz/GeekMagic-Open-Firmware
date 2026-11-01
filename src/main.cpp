@@ -32,6 +32,7 @@
 #include "web/Api.h"
 #include "ntp/NTPClient.h"
 #include "boot/RescueMode.h"
+#include "screens/ScreenManager.h"
 #include "dashboard/DashboardManager.h"
 #include <array>
 
@@ -137,6 +138,8 @@ void setup() {
         Logger::info("Configuration loaded successfully");
     }
 
+    ScreenManager::begin();  // time zone + rotation order from the config
+
     if (RescueMode::checkBootLoop()) {
         RescueMode::run();
         EspClass::wdtEnable(WDTO_2S);
@@ -221,6 +224,10 @@ void loop() {
     }
 
     DisplayManager::update();
+
+    if (wifiManager != nullptr && WiFiManager::isConnected() && !wifiManager->isApMode()) {
+        ScreenManager::update();
+    }
 
     if (METRICS_ENDPOINT[0] != '\0' && wifiManager != nullptr && WiFiManager::isConnected() &&
         !wifiManager->isApMode()) {

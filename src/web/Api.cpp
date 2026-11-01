@@ -25,6 +25,8 @@
 #include "web/Webserver.h"
 #include "web/Api.h"
 #include "project_version.h"
+#include "screens/ScreenManager.h"
+#include "screens/Weather.h"
 
 static constexpr size_t DISPLAY_FRAME_MAX_WIDTH = 240;  // widest row we buffer (the panel is 240x240)
 #include "display/DisplayManager.h"
@@ -162,6 +164,17 @@ void registerApiEndpoints(Webserver* webserver) {
     // @openapi {get} /system version=v1 group=System summary="Get system info (heap, uptime, version)" requiresAuth=true
     // responses=200:application/json,401:application/json
     webserver->raw().on("/api/v1/system", HTTP_GET, [webserver]() { handleSystemInfo(webserver); });
+
+    // @openapi {get} /screens version=v1 group=Screens summary="Native screens: current screen, order, rotation, time zone, weather" requiresAuth=true
+    // responses=200:application/json,401:application/json
+    webserver->raw().on("/api/v1/screens", HTTP_GET, [webserver]() { handleScreensGet(webserver); });
+
+    // @openapi {post} /screens version=v1 group=Screens summary="Set rotation order/seconds, time zone, weather location, or show a screen now"
+    // requiresAuth=true requestBody=application/json
+    // requestBodySchema=order:string,secs:integer,tz:string,lat:number,lon:number,show:string,hold:integer
+    // example={"order":"clock,weather","secs":20,"show":"weather","hold":60}
+    // responses=200:application/json,400:application/json,401:application/json
+    webserver->raw().on("/api/v1/screens", HTTP_POST, [webserver]() { handleScreensSet(webserver); });
 
     // @openapi {post} /display/frame version=v1 group=Display summary="Stream raw RGB565 pixels to the display (x,y,w,h query)"
     // requiresAuth=true responses=200:application/json,400:application/json,401:application/json
@@ -306,6 +319,128 @@ void handleSystemInfo(Webserver* webserver) {
 }
 
 namespace {
+auto screensJson() -> String {
+    JsonDocument doc;
+    doc["current"] = ScreenManager::current();
+    doc["available"] = ScreenManager::available();
+    doc["order"] = configManager.screen_order.c_str();
+    doc["secs"] = configManager.screen_secs;
+    doc["tz"] = configManager.tz.c_str();
+    doc["lat"] = configManager.weather_lat;
+    doc["lon"] = configManager.weather_lon;
+    JsonObject weather = doc["weather"].to<JsonObject>();
+    weather["hasData"] = Weather::hasData();
+    weather["lastFetchOk"] = Weather::lastFetchOk();
+    if (Weather::hasData()) {
+        weather["temp"] = Weather::data().temp;
+        weather["text"] = Weather::text();
+    }
+
+    String json;
+    serializeJson(doc, json);
+
+    return json;
+}
+}  // namespace
+
+/**
+ * @brief GET /api/v1/screens: what the native screens are doing
+ */
+void handleScreensGet(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    setCorsHeaders(webserver);
+    webserver->raw().send(HTTP_CODE_OK, "application/json", screensJson());
+}
+
+/**
+ * @brief POST /api/v1/screens: change rotation order/seconds, time zone, weather location; or show a screen now
+ */
+void handleScreensSet(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    auto fail = [webserver](const char* message) {
+        JsonDocument err;
+        err["status"] = "error";
+        err["message"] = message;
+        String json;
+        serializeJson(err, json);
+        setCorsHeaders(webserver);
+        webserver->raw().send(HTTP_CODE_BAD_REQUEST, "application/json", json);
+    };
+
+    JsonDocument doc;
+    if (!webserver->raw().hasArg("plain") || deserializeJson(doc, webserver->raw().arg("plain"))) {
+        fail("Missing or invalid JSON body");
+
+        return;
+    }
+
+    bool changed = false;
+
+    if (doc["order"].is<const char*>()) {
+        const char* order = doc["order"];
+        if (!ScreenManager::setOrder(order)) {
+            fail("order has no known screens (available: clock,weather)");
+
+            return;
+        }
+        configManager.screen_order = order;
+        changed = true;
+    }
+
+    if (doc["secs"].is<int>()) {
+        const int secs = doc["secs"];
+        if (secs < 1 || secs > 3600) {
+            fail("secs must be 1..3600");
+
+            return;
+        }
+        configManager.screen_secs = static_cast<uint16_t>(secs);
+        changed = true;
+    }
+
+    if (doc["tz"].is<const char*>()) {
+        const char* tz = doc["tz"];
+        if (strlen(tz) == 0 || strlen(tz) > 63) {
+            fail("tz must be a POSIX TZ string up to 63 chars, e.g. MST7MDT,M3.2.0,M11.1.0");
+
+            return;
+        }
+        configManager.tz = tz;
+        ScreenManager::applyTimezone(tz);
+        changed = true;
+    }
+
+    if (doc["lat"].is<float>() && doc["lon"].is<float>()) {
+        configManager.weather_lat = doc["lat"];
+        configManager.weather_lon = doc["lon"];
+        Weather::refreshSoon();
+        changed = true;
+    }
+
+    if (changed) {
+        configManager.save();
+    }
+
+    if (doc["show"].is<const char*>()) {
+        const uint32_t hold = doc["hold"] | 0U;
+        if (!ScreenManager::show(doc["show"], hold)) {
+            fail("unknown screen (available: clock,weather)");
+
+            return;
+        }
+    }
+
+    setCorsHeaders(webserver);
+    webserver->raw().send(HTTP_CODE_OK, "application/json", screensJson());
+}
+
+namespace {
 // State for the streaming frame upload. Pixels arrive as raw RGB565 words (little-endian, i.e. native uint16_t on the
 // ESP8266) in row-major order and are written to the display one row at a time, so no frame buffer is needed.
 struct FrameState {
@@ -361,6 +496,7 @@ void handleDisplayFrame(Webserver* webserver) {
         g_frame.w = static_cast<uint16_t>(fw);
         g_frame.h = static_cast<uint16_t>(fh);
         DisplayManager::stopGif();  // do not fight a running GIF for the display
+        ScreenManager::hold(webserver->raw().hasArg("hold") ? static_cast<uint32_t>(webserver->raw().arg("hold").toInt()) : 60U);
         return;
     }
 
@@ -1259,6 +1395,9 @@ void handlePlayGif(Webserver* webserver) {
     // ESP8266 leaves the web server without heap. Callers that really want a loop pass {"loop": true}.
     const bool loop = doc["loop"] | false;
     bool playOk = DisplayManager::playGifFullScreen(foundPath, 0, loop);
+    if (playOk) {
+        ScreenManager::hold(120U);  // keep the native screens off the display while the GIF owns it
+    }
 
     JsonDocument resp;
 

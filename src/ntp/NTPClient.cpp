@@ -143,9 +143,9 @@ void NTPClient::performSync() {
         const char* server2 = (srv != nullptr && srv[0] != '\0') ? DEFAULT_NTP_SERVER1 : nullptr;
 
         if (server2 != nullptr) {
-            configTime(0, 0, server1, server2);
+            configTime(configManager.tz.c_str(), server1, server2);
         } else {
-            configTime(0, 0, server1);
+            configTime(configManager.tz.c_str(), server1);
         }
 
         unsigned long start = millis();

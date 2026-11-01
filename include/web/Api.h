@@ -48,6 +48,8 @@ void handleDisplayRotationSet(Webserver* webserver);
 
 void handleTokenCheck(Webserver* webserver);
 void handleSystemInfo(Webserver* webserver);
+void handleScreensGet(Webserver* webserver);
+void handleScreensSet(Webserver* webserver);
 void handleDisplayFrame(Webserver* webserver);
 void handleDisplayFrameDone(Webserver* webserver);
 void handleTokenSave(Webserver* webserver);

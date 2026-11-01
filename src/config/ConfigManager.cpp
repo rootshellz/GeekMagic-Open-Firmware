@@ -68,6 +68,11 @@ auto ConfigManager::load() -> bool {
     String ntp_server_cfg = doc["ntp_server"] | "";
 
     this->lcd_rotation = doc["lcd_rotation"] | lcd_rotation;
+    this->tz = doc["tz"] | this->tz.c_str();
+    this->weather_lat = doc["weather_lat"] | this->weather_lat;
+    this->weather_lon = doc["weather_lon"] | this->weather_lon;
+    this->screen_order = doc["screen_order"] | this->screen_order.c_str();
+    this->screen_secs = doc["screen_secs"] | this->screen_secs;
 
     String nvs_ssid = secure.get("wifi_ssid", "");
     String nvs_password = secure.get("wifi_password", "");
@@ -207,6 +212,11 @@ auto ConfigManager::save() -> bool {
     }
 
     doc["lcd_rotation"] = lcd_rotation;
+    doc["tz"] = tz.c_str();
+    doc["weather_lat"] = weather_lat;
+    doc["weather_lon"] = weather_lon;
+    doc["screen_order"] = screen_order.c_str();
+    doc["screen_secs"] = screen_secs;
     if (!this->ntp_server.empty()) {
         doc["ntp_server"] = this->ntp_server.c_str();
     }
