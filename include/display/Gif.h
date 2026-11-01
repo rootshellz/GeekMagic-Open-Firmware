@@ -39,6 +39,9 @@ class Gif {
     auto setLoopEnabled(bool enabled) -> void;
 
    private:
+    /** @brief Close the current GIF and free the AnimatedGIF decoder (~25 KB of an ESP8266's ~80 KB RAM). */
+    auto releaseDecoder() -> void;
+
     AnimatedGIF* m_gif;
     volatile bool m_playRequested;
     volatile bool m_playing;

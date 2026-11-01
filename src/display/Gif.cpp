@@ -474,6 +474,21 @@ auto Gif::playOne(const String& path) -> bool {
 }
 
 /**
+ * @brief Close playback and free the decoder. begin() allocates ~25 KB; it used to be freed only on an explicit stop(), so
+ * after a GIF ended by itself it stayed allocated and starved the web server of heap (HTTP dead while ping still worked).
+ */
+auto Gif::releaseDecoder() -> void {
+    if (m_gif != nullptr) {
+        m_gif->close();
+        delete m_gif;
+        m_gif = nullptr;
+    }
+
+    m_playing = false;
+    m_playRequested = false;
+}
+
+/**
  * @brief Update the GIF playback, should be called regularly
  *
  * @return void
@@ -515,8 +530,7 @@ auto Gif::update() -> void {
         if (m_loopEnabled && !m_stopRequested && !m_currentPath.isEmpty()) {
             m_gif->close();
             if (m_gif->open(m_currentPath.c_str(), gifOpenFile, gifCloseFile, gifReadFile, gifSeekFile, gifDraw) <= 0) {
-                m_playing = false;
-                m_playRequested = false;
+                releaseDecoder();
 
                 return;
             }
@@ -530,9 +544,7 @@ auto Gif::update() -> void {
             return;
         }
 
-        m_gif->close();
-        m_playing = false;
-        m_playRequested = false;
+        releaseDecoder();
 
         return;
     }
@@ -545,9 +557,7 @@ auto Gif::update() -> void {
     m_targetMs = targetMs;
 
     if ((millis() - m_startMs) > GIF_MAX_MS_PER_FILE) {
-        m_gif->close();
-        m_playing = false;
-        m_playRequested = false;
+        releaseDecoder();
 
         return;
     }

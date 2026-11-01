@@ -243,6 +243,12 @@ void loop() {
 
         snprintf(msgBuf, sizeof(msgBuf), "Free heap: %s (initial: %s)", freeBuf, initBuf);
         Logger::info(msgBuf);
+
+        // INFO is not kept in the /api/v1/logs buffer; surface low heap as a WARN so it can be read after the fact.
+        static constexpr uint32_t LOW_HEAP_WARN_BYTES = 12000U;
+        if (ESP.getFreeHeap() < LOW_HEAP_WARN_BYTES) {  // NOLINT(readability-static-accessed-through-instance)
+            Logger::warn(msgBuf, "Heap");
+        }
     }
 
     EspClass::wdtFeed();  // kick watchdog
