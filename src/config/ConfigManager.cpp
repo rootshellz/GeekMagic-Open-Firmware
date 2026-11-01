@@ -199,6 +199,12 @@ auto ConfigManager::save() -> bool {
 
     secure.put("wifi_ssid", this->getSSID());
     secure.put("wifi_password", this->getPassword());
+    // Persist the API token too: without this a token set through /api/v1/token/save lives in RAM only and the
+    // previously stored (default) token comes back on every reboot. Skip when empty: load() calls save() during
+    // first-boot migration before api_token has been read, and an empty put would erase the stored token.
+    if (this->api_token.length() != 0) {
+        secure.put("api_token", this->api_token.c_str());
+    }
 
     doc["lcd_rotation"] = lcd_rotation;
     if (!this->ntp_server.empty()) {

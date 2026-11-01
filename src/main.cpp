@@ -103,6 +103,16 @@ void setup() {
     delay(BOOT_DELAY_MS);
     Serial.println("");
     Logger::info(("GeekMagic Open Firmware " + String(PROJECT_VER_STR)).c_str());
+    {
+        // Log why we (re)booted: the log buffer is RAM-only, so this is how a crash shows up in /api/v1/logs afterwards.
+        const rst_info* resetInfo = EspClass::getResetInfoPtr();
+        char buf[160];
+        snprintf(buf, sizeof(buf), "Reset reason: %s (code %u) exccause=%u epc1=0x%08x excvaddr=0x%08x free heap=%u",
+                 EspClass::getResetReason().c_str(), static_cast<unsigned>(resetInfo->reason),
+                 static_cast<unsigned>(resetInfo->exccause), static_cast<unsigned>(resetInfo->epc1),
+                 static_cast<unsigned>(resetInfo->excvaddr), static_cast<unsigned>(EspClass::getFreeHeap()));
+        Logger::info(buf, "Boot");
+    }
 
     constexpr int TOTAL_STEPS = 5;
     int step = 0;
