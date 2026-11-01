@@ -653,9 +653,10 @@ void DisplayManager::drawLoadingBar(float progress, int yPos, int barWidth, int 
  *
  * @param path Path to the GIF file on LittleFS
  * @param timeMs Duration to play the GIF in milliseconds (0 = play full GIF)
+ * @param loop With timeMs == 0: keep looping (true) or play once and free the decoder (false)
  * @return true if played successfully, false on error
  */
-auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs) -> bool {
+auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs, bool loop) -> bool {
     if (g_gif == nullptr) {
         g_gif = new Gif();
         if (g_gif == nullptr) {
@@ -672,7 +673,7 @@ auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs) -> b
 
     DisplayManager::clearScreen();
 
-    g_gif->setLoopEnabled(timeMs == 0);
+    g_gif->setLoopEnabled(loop && timeMs == 0);
 
     const bool started = g_gif->playOne(path);
     if (!started) {

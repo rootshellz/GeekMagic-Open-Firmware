@@ -47,6 +47,7 @@ void handleDisplayRotationGet(Webserver* webserver);
 void handleDisplayRotationSet(Webserver* webserver);
 
 void handleTokenCheck(Webserver* webserver);
+void handleSystemInfo(Webserver* webserver);
 void handleTokenSave(Webserver* webserver);
 
 void handleLogsGet(Webserver* webserver);

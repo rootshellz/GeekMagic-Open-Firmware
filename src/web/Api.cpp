@@ -24,6 +24,7 @@
 
 #include "web/Webserver.h"
 #include "web/Api.h"
+#include "project_version.h"
 #include "display/DisplayManager.h"
 
 #include "config/ConfigManager.h"
@@ -156,6 +157,10 @@ void registerApiEndpoints(Webserver* webserver) {
     // requiresAuth=true responses=200:application/json,401:application/json
     webserver->raw().on("/api/v1/token/check", HTTP_GET, [webserver]() { handleTokenCheck(webserver); });
 
+    // @openapi {get} /system version=v1 group=System summary="Get system info (heap, uptime, version)" requiresAuth=true
+    // responses=200:application/json,401:application/json
+    webserver->raw().on("/api/v1/system", HTTP_GET, [webserver]() { handleSystemInfo(webserver); });
+
     // @openapi {post} /token/save version=v1 group=Authentication summary="Save a new bearer token" requiresAuth=true
     // requestBody=application/json requestBodySchema=token:string example={"token":"your_secure_token_value"}
     // responses=200:application/json,401:application/json,400:application/json
@@ -261,6 +266,29 @@ void handleTokenCheck(Webserver* webserver) {
     JsonDocument doc;
     doc["status"] = "ok";
     doc["message"] = "Token is valid";
+
+    String json;
+    serializeJson(doc, json);
+
+    setCorsHeaders(webserver);
+    webserver->raw().send(HTTP_CODE_OK, "application/json", json);
+}
+
+/**
+ * @brief System info: uptime, heap, version (heap numbers are what matters on an ESP8266 with ~80 KB RAM)
+ */
+void handleSystemInfo(Webserver* webserver) {
+    if (!requireBearerToken(webserver)) {
+        return;
+    }
+
+    JsonDocument doc;
+    doc["version"] = PROJECT_VER_STR;
+    doc["uptimeMs"] = millis();
+    doc["freeHeap"] = ESP.getFreeHeap();                        // NOLINT(readability-static-accessed-through-instance)
+    doc["maxFreeBlock"] = ESP.getMaxFreeBlockSize();            // NOLINT(readability-static-accessed-through-instance)
+    doc["heapFragmentation"] = ESP.getHeapFragmentation();      // NOLINT(readability-static-accessed-through-instance)
+    doc["resetReason"] = ESP.getResetReason();                  // NOLINT(readability-static-accessed-through-instance)
 
     String json;
     serializeJson(doc, json);
@@ -1109,7 +1137,10 @@ void handlePlayGif(Webserver* webserver) {
         return;
     }
 
-    bool playOk = DisplayManager::playGifFullScreen(foundPath);
+    // One-shot by default: a looping GIF keeps the ~25 KB decoder allocated for as long as it plays, which on an
+    // ESP8266 leaves the web server without heap. Callers that really want a loop pass {"loop": true}.
+    const bool loop = doc["loop"] | false;
+    bool playOk = DisplayManager::playGifFullScreen(foundPath, 0, loop);
 
     JsonDocument resp;
 
