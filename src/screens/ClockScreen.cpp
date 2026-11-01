@@ -161,7 +161,9 @@ void clockTick() {
 
     // date + AM/PM only when they change
     char date[16];
-    strftime(date, sizeof(date), "%a %b %-d", &t);
+    // newlib's strftime has no "%-d" (it prints garbage), so format the day number ourselves
+    const size_t n = strftime(date, sizeof(date), "%a %b ", &t);
+    snprintf(date + n, sizeof(date) - n, "%d", t.tm_mday);
     for (char* p = date; *p != '\0'; p++) {
         *p = static_cast<char>(toupper(static_cast<unsigned char>(*p)));
     }
