@@ -111,7 +111,7 @@ void setup() {
                  EspClass::getResetReason().c_str(), static_cast<unsigned>(resetInfo->reason),
                  static_cast<unsigned>(resetInfo->exccause), static_cast<unsigned>(resetInfo->epc1),
                  static_cast<unsigned>(resetInfo->excvaddr), static_cast<unsigned>(EspClass::getFreeHeap()));
-        Logger::info(buf, "Boot");
+        Logger::warn(buf, "Boot");  // WARN: INFO entries are not kept in the /api/v1/logs buffer
     }
 
     constexpr int TOTAL_STEPS = 5;
