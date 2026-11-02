@@ -73,6 +73,8 @@ auto ConfigManager::load() -> bool {
     this->weather_lon = doc["weather_lon"] | this->weather_lon;
     this->screen_order = doc["screen_order"] | this->screen_order.c_str();
     this->screen_secs = doc["screen_secs"] | this->screen_secs;
+    this->server_url = doc["server_url"] | this->server_url.c_str();
+    this->device_id = doc["device_id"] | this->device_id.c_str();
 
     String nvs_ssid = secure.get("wifi_ssid", "");
     String nvs_password = secure.get("wifi_password", "");
@@ -217,6 +219,8 @@ auto ConfigManager::save() -> bool {
     doc["weather_lon"] = weather_lon;
     doc["screen_order"] = screen_order.c_str();
     doc["screen_secs"] = screen_secs;
+    doc["server_url"] = server_url.c_str();
+    doc["device_id"] = device_id.c_str();
     if (!this->ntp_server.empty()) {
         doc["ntp_server"] = this->ntp_server.c_str();
     }

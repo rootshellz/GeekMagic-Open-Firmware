@@ -26,6 +26,7 @@
 #include "web/Api.h"
 #include "project_version.h"
 #include "screens/ScreenManager.h"
+#include "screens/Hub.h"
 #include "screens/Weather.h"
 
 static constexpr size_t DISPLAY_FRAME_MAX_WIDTH = 240;  // widest row we buffer (the panel is 240x240)
@@ -171,7 +172,7 @@ void registerApiEndpoints(Webserver* webserver) {
 
     // @openapi {post} /screens version=v1 group=Screens summary="Set rotation order/seconds, time zone, weather location, or show a screen now"
     // requiresAuth=true requestBody=application/json
-    // requestBodySchema=order:string,secs:integer,tz:string,lat:number,lon:number,show:string,hold:integer
+    // requestBodySchema=order:string,secs:integer,tz:string,lat:number,lon:number,server:string,device_id:string,show:string,hold:integer
     // example={"order":"clock,weather","secs":20,"show":"weather","hold":60}
     // responses=200:application/json,400:application/json,401:application/json
     webserver->raw().on("/api/v1/screens", HTTP_POST, [webserver]() { handleScreensSet(webserver); });
@@ -328,6 +329,9 @@ auto screensJson() -> String {
     doc["tz"] = configManager.tz.c_str();
     doc["lat"] = configManager.weather_lat;
     doc["lon"] = configManager.weather_lon;
+    doc["server"] = configManager.server_url.c_str();
+    doc["device_id"] = configManager.device_id.c_str();
+    doc["serverConfigOk"] = Hub::configLastOk();
     JsonObject weather = doc["weather"].to<JsonObject>();
     weather["hasData"] = Weather::hasData();
     weather["lastFetchOk"] = Weather::lastFetchOk();
@@ -385,7 +389,7 @@ void handleScreensSet(Webserver* webserver) {
     if (doc["order"].is<const char*>()) {
         const char* order = doc["order"];
         if (!ScreenManager::setOrder(order)) {
-            fail("order has no known screens (available: clock,weather)");
+            fail("order has no known screens (available: clock,weather,quote)");
 
             return;
         }
@@ -416,6 +420,19 @@ void handleScreensSet(Webserver* webserver) {
         changed = true;
     }
 
+    if (doc["server"].is<const char*>() || doc["device_id"].is<const char*>()) {
+        const std::string url = doc["server"].is<const char*>() ? doc["server"].as<const char*>() : configManager.server_url;
+        const std::string id = doc["device_id"].is<const char*>() ? doc["device_id"].as<const char*>() : configManager.device_id;
+        if ((!url.empty() && url.rfind("http://", 0) != 0) || url.size() > 100 || id.size() > 32) {
+            fail("server must be empty or http://host[:port] (no TLS), device_id up to 32 chars");
+
+            return;
+        }
+        configManager.server_url = url;
+        configManager.device_id = id;
+        changed = true;
+    }
+
     if (doc["lat"].is<float>() && doc["lon"].is<float>()) {
         configManager.weather_lat = doc["lat"];
         configManager.weather_lon = doc["lon"];
@@ -430,7 +447,7 @@ void handleScreensSet(Webserver* webserver) {
     if (doc["show"].is<const char*>()) {
         const uint32_t hold = doc["hold"] | 0U;
         if (!ScreenManager::show(doc["show"], hold)) {
-            fail("unknown screen (available: clock,weather)");
+            fail("unknown screen (available: clock,weather,quote)");
 
             return;
         }

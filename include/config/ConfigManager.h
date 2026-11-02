@@ -66,6 +66,8 @@ class ConfigManager {
     float weather_lat = 39.7294F;               // default: Aurora, CO
     float weather_lon = -104.8319F;
     std::string screen_order = "clock,weather";
+    std::string server_url;                     // screens server, e.g. http://192.168.13.42:8090 (plain HTTP; empty = standalone)
+    std::string device_id;                      // this device's id on that server
     uint16_t screen_secs = 20;                  // seconds each native screen stays up
 
     const char* getNtpServer() const { return ntp_server.c_str(); }

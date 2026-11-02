@@ -6,6 +6,7 @@
 
 #include "config/ConfigManager.h"
 #include "display/DisplayManager.h"
+#include "screens/Hub.h"
 
 extern ConfigManager configManager;
 
@@ -20,6 +21,7 @@ struct ScreenDef {
 const ScreenDef SCREENS[] = {
     {"clock", ScreenImpl::clockEnter, ScreenImpl::clockTick},
     {"weather", ScreenImpl::weatherEnter, ScreenImpl::weatherTick},
+    {"quote", ScreenImpl::quoteEnter, ScreenImpl::quoteTick},
 };
 constexpr size_t SCREEN_COUNT = sizeof(SCREENS) / sizeof(SCREENS[0]);
 constexpr uint32_t SPLASH_MS = 6000U;  // keep the boot screen (version, IP) visible for a few seconds
@@ -157,11 +159,23 @@ const char* current() {
     return g_orderLen > 0 ? SCREENS[g_order[g_idx]].name : "";
 }
 
-const char* available() { return "clock,weather"; }
+bool inRotation(const char* name) {
+    const int idx = indexOf(name, strlen(name));
+    for (size_t i = 0; idx >= 0 && i < g_orderLen; i++) {
+        if (g_order[i] == idx) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+const char* available() { return "clock,weather,quote"; }
 
 void update() {
     const uint32_t now = millis();
     Weather::update();
+    Hub::update();
 
     if (now < SPLASH_MS || g_orderLen == 0) {
         return;
