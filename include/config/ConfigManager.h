@@ -63,8 +63,8 @@ class ConfigManager {
     uint8_t lcd_rotation = 4;
     std::string ntp_server;
     std::string tz = "MST7MDT,M3.2.0,M11.1.0";  // POSIX TZ string (default: Mountain time with DST)
-    float weather_lat = 39.7294F;               // default: Aurora, CO
-    float weather_lon = -104.8319F;
+    float weather_lat = 39.5698F;               // default: 80016 (Aurora, CO)
+    float weather_lon = -104.6948F;
     std::string screen_order = "clock,weather";
     std::string server_url;                     // screens server, e.g. http://192.168.13.42:8090 (plain HTTP; empty = standalone)
     std::string device_id;                      // this device's id on that server
