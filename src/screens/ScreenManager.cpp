@@ -28,6 +28,7 @@ constexpr uint32_t SPLASH_MS = 6000U;  // keep the boot screen (version, IP) vis
 constexpr uint32_t MAX_HOLD_S = 86400U;
 
 uint8_t g_order[SCREEN_COUNT];
+uint16_t g_secs[SCREEN_COUNT];  // seconds each rotation entry stays up; 0 = the configured default (screen_secs)
 size_t g_orderLen = 0;
 size_t g_idx = 0;
 bool g_entered = false;
@@ -56,6 +57,7 @@ void defaultOrder() {
     g_orderLen = SCREEN_COUNT;
     for (size_t i = 0; i < SCREEN_COUNT; i++) {
         g_order[i] = static_cast<uint8_t>(i);
+        g_secs[i] = 0;
     }
 }
 
@@ -77,17 +79,24 @@ void applyTimezone(const char* tz) {
 
 bool setOrder(const char* csv) {
     uint8_t order[SCREEN_COUNT];
+    uint16_t secs[SCREEN_COUNT];
     size_t len = 0;
     const char* p = csv != nullptr ? csv : "";
 
+    // "clock:20,weather,quote:45": each entry is a screen name with optional :seconds
     while (*p != '\0' && len < SCREEN_COUNT) {
         const char* end = strchr(p, ',');
-        const size_t n = end != nullptr ? static_cast<size_t>(end - p) : strlen(p);
+        const size_t total = end != nullptr ? static_cast<size_t>(end - p) : strlen(p);
+        const char* colon = static_cast<const char*>(memchr(p, ':', total));
+        const size_t n = colon != nullptr ? static_cast<size_t>(colon - p) : total;
         const int idx = indexOf(p, n);
         if (idx >= 0) {
-            order[len++] = static_cast<uint8_t>(idx);
+            const long sv = colon != nullptr ? atol(colon + 1) : 0;
+            order[len] = static_cast<uint8_t>(idx);
+            secs[len] = (sv >= 1 && sv <= 3600) ? static_cast<uint16_t>(sv) : 0;
+            len++;
         }
-        p += n;
+        p += total;
         if (*p == ',') {
             p++;
         }
@@ -100,6 +109,7 @@ bool setOrder(const char* csv) {
         defaultOrder();
     } else {
         memcpy(g_order, order, len);
+        memcpy(g_secs, secs, len * sizeof(secs[0]));
         g_orderLen = len;
     }
 
@@ -136,6 +146,7 @@ bool show(const char* name, uint32_t holdSecs) {
 
     // not in the rotation: temporarily put it at the front
     g_order[0] = static_cast<uint8_t>(idx);
+    g_secs[0] = 0;
     g_orderLen = g_orderLen > 0 ? g_orderLen : 1;
     g_pendingHoldMs = holdSecs > 0 ? holdMs(holdSecs) : 0;
     g_idx = 0;
@@ -194,7 +205,8 @@ void update() {
 
     SCREENS[g_order[g_idx]].tick();
 
-    const uint32_t secs = configManager.screen_secs > 0 ? configManager.screen_secs : 20U;
+    const uint32_t defSecs = configManager.screen_secs > 0 ? configManager.screen_secs : 20U;
+    const uint32_t secs = g_secs[g_idx] > 0 ? g_secs[g_idx] : defSecs;
     if (g_orderLen > 1 && static_cast<int32_t>(now - g_lastSwitchMs) >= static_cast<int32_t>(secs * 1000U)) {
         g_idx = (g_idx + 1) % g_orderLen;
         enterCurrent();

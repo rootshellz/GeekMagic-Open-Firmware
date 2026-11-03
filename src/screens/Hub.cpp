@@ -90,9 +90,12 @@ auto fetchConfig() -> bool {
         configManager.screen_secs = static_cast<uint16_t>(doc["secs"].as<int>());
         changed = true;
     }
-    if (doc["order"].is<const char*>() && configManager.screen_order != doc["order"].as<const char*>()) {
-        if (ScreenManager::setOrder(doc["order"].as<const char*>())) {
-            configManager.screen_order = doc["order"].as<const char*>();
+    // "plan" = order with optional per-screen seconds ("clock:20,weather,quote:45"); "order" = plain names (older servers)
+    const char* plan = doc["plan"].is<const char*>() ? doc["plan"].as<const char*>()
+                                                     : (doc["order"].is<const char*>() ? doc["order"].as<const char*>() : nullptr);
+    if (plan != nullptr && configManager.screen_order != plan) {
+        if (ScreenManager::setOrder(plan)) {
+            configManager.screen_order = plan;
             changed = true;
         }
     }
