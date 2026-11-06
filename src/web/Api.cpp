@@ -33,6 +33,7 @@ static constexpr size_t DISPLAY_FRAME_MAX_WIDTH = 240;  // widest row we buffer 
 #include "display/DisplayManager.h"
 
 #include "config/ConfigManager.h"
+#include "display/Brightness.h"
 #include "wireless/WiFiManager.h"
 #include "ntp/NTPClient.h"
 
@@ -172,7 +173,7 @@ void registerApiEndpoints(Webserver* webserver) {
 
     // @openapi {post} /screens version=v1 group=Screens summary="Set rotation order/seconds, time zone, weather location, or show a screen now"
     // requiresAuth=true requestBody=application/json
-    // requestBodySchema=order:string,secs:integer,tz:string,lat:number,lon:number,server:string,device_id:string,show:string,hold:integer
+    // requestBodySchema=order:string,secs:integer,tz:string,lat:number,lon:number,server:string,device_id:string,brightness:integer,night_from:string,night_to:string,night_level:integer,show:string,hold:integer
     // example={"order":"clock,weather","secs":20,"show":"weather","hold":60}
     // responses=200:application/json,400:application/json,401:application/json
     webserver->raw().on("/api/v1/screens", HTTP_POST, [webserver]() { handleScreensSet(webserver); });
@@ -332,6 +333,14 @@ auto screensJson() -> String {
     doc["server"] = configManager.server_url.c_str();
     doc["device_id"] = configManager.device_id.c_str();
     doc["serverConfigOk"] = Hub::configLastOk();
+    doc["brightness"] = configManager.brightness;
+    char clock[8];
+    Brightness::formatClock(configManager.night_from, clock, sizeof(clock));
+    doc["night_from"] = clock;
+    Brightness::formatClock(configManager.night_to, clock, sizeof(clock));
+    doc["night_to"] = clock;
+    doc["night_level"] = configManager.night_level;
+    doc["level"] = Brightness::current();
     JsonObject weather = doc["weather"].to<JsonObject>();
     weather["hasData"] = Weather::hasData();
     weather["lastFetchOk"] = Weather::lastFetchOk();
@@ -431,6 +440,18 @@ void handleScreensSet(Webserver* webserver) {
         configManager.server_url = url;
         configManager.device_id = id;
         changed = true;
+    }
+
+    {
+        const char* brightnessError = nullptr;
+        if (Brightness::applyJson(doc, &brightnessError)) {
+            changed = true;
+        }
+        if (brightnessError != nullptr) {
+            fail(brightnessError);
+
+            return;
+        }
     }
 
     if (doc["lat"].is<float>() && doc["lon"].is<float>()) {

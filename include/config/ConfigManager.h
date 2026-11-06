@@ -69,6 +69,10 @@ class ConfigManager {
     std::string server_url;                     // screens server, e.g. http://192.168.13.42:8090 (plain HTTP; empty = standalone)
     std::string device_id;                      // this device's id on that server
     uint16_t screen_secs = 20;                  // seconds each native screen stays up
+    uint8_t brightness = 100;                   // backlight level 0..100 (daytime)
+    int16_t night_from = -1;                    // night window start, minutes since midnight (-1 = no schedule)
+    int16_t night_to = -1;                      // night window end
+    uint8_t night_level = 0;                    // backlight level during the night window (0 = off)
 
     const char* getNtpServer() const { return ntp_server.c_str(); }
     void setNtpServer(const char* s) {

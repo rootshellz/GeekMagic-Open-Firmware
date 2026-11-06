@@ -25,6 +25,7 @@
 
 #include "project_version.h"
 #include "display/DisplayManager.h"
+#include "display/Brightness.h"
 #include "config/ConfigManager.h"
 #include "display/Gif.h"
 
@@ -215,8 +216,7 @@ auto DisplayManager::getGfx() -> Arduino_GFX* { return &g_lcd; }
  * @return void
  */
 static inline void lcdBacklightOn() {
-    pinMode((uint8_t)LCD_BACKLIGHT_GPIO, OUTPUT);
-    digitalWrite((uint8_t)LCD_BACKLIGHT_GPIO, LCD_BACKLIGHT_ACTIVE_LOW ? LOW : HIGH);
+    Brightness::update(true);  // honours the configured level (full by default)
 }
 
 /**

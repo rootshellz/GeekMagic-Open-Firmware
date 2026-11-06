@@ -28,6 +28,7 @@
 #include "config/ConfigManager.h"
 #include "wireless/WiFiManager.h"
 #include "display/DisplayManager.h"
+#include "display/Brightness.h"
 #include "web/Webserver.h"
 #include "web/Api.h"
 #include "ntp/NTPClient.h"
@@ -224,6 +225,7 @@ void loop() {
     }
 
     DisplayManager::update();
+    Brightness::update();
 
     if (wifiManager != nullptr && WiFiManager::isConnected() && !wifiManager->isApMode()) {
         ScreenManager::update();

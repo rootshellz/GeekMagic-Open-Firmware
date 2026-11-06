@@ -73,6 +73,10 @@ auto ConfigManager::load() -> bool {
     this->weather_lon = doc["weather_lon"] | this->weather_lon;
     this->screen_order = doc["screen_order"] | this->screen_order.c_str();
     this->screen_secs = doc["screen_secs"] | this->screen_secs;
+    this->brightness = doc["brightness"] | this->brightness;
+    this->night_from = doc["night_from"] | this->night_from;
+    this->night_to = doc["night_to"] | this->night_to;
+    this->night_level = doc["night_level"] | this->night_level;
     this->server_url = doc["server_url"] | this->server_url.c_str();
     this->device_id = doc["device_id"] | this->device_id.c_str();
 
@@ -219,6 +223,10 @@ auto ConfigManager::save() -> bool {
     doc["weather_lon"] = weather_lon;
     doc["screen_order"] = screen_order.c_str();
     doc["screen_secs"] = screen_secs;
+    doc["brightness"] = brightness;
+    doc["night_from"] = night_from;
+    doc["night_to"] = night_to;
+    doc["night_level"] = night_level;
     doc["server_url"] = server_url.c_str();
     doc["device_id"] = device_id.c_str();
     if (!this->ntp_server.empty()) {

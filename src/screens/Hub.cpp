@@ -8,6 +8,7 @@
 #include <WiFiClient.h>
 
 #include "config/ConfigManager.h"
+#include "display/Brightness.h"
 #include "screens/ScreenManager.h"
 #include "screens/Weather.h"
 
@@ -97,6 +98,15 @@ auto fetchConfig() -> bool {
         if (ScreenManager::setOrder(plan)) {
             configManager.screen_order = plan;
             changed = true;
+        }
+    }
+    {
+        const char* brightnessError = nullptr;
+        if (Brightness::applyJson(doc, &brightnessError)) {
+            changed = true;
+        }
+        if (brightnessError != nullptr) {
+            Logger::warn(brightnessError, "Hub");
         }
     }
     if (changed) {
