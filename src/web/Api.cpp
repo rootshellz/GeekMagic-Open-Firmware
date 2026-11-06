@@ -312,6 +312,19 @@ void handleSystemInfo(Webserver* webserver) {
     doc["maxFreeBlock"] = ESP.getMaxFreeBlockSize();            // NOLINT(readability-static-accessed-through-instance)
     doc["heapFragmentation"] = ESP.getHeapFragmentation();      // NOLINT(readability-static-accessed-through-instance)
     doc["resetReason"] = ESP.getResetReason();                  // NOLINT(readability-static-accessed-through-instance)
+    // Hardware identity, to tell board builds apart (flash chip vendor, real vs configured flash size, SDK/core versions).
+    char hex[12];
+    snprintf(hex, sizeof(hex), "%06x", ESP.getChipId());        // NOLINT(readability-static-accessed-through-instance)
+    doc["chipId"] = hex;
+    snprintf(hex, sizeof(hex), "%06x", ESP.getFlashChipId());   // NOLINT(readability-static-accessed-through-instance)
+    doc["flashId"] = hex;                                       // 0xCCTTVV: capacity, type, manufacturer (e.g. 1640ef = Winbond W25Q32)
+    doc["flashRealSize"] = ESP.getFlashChipRealSize();          // NOLINT(readability-static-accessed-through-instance)
+    doc["flashSize"] = ESP.getFlashChipSize();                  // NOLINT(readability-static-accessed-through-instance)
+    doc["flashSpeedMHz"] = ESP.getFlashChipSpeed() / 1000000U;  // NOLINT(readability-static-accessed-through-instance)
+    doc["cpuMHz"] = ESP.getCpuFreqMHz();                        // NOLINT(readability-static-accessed-through-instance)
+    doc["sdk"] = ESP.getSdkVersion();                           // NOLINT(readability-static-accessed-through-instance)
+    doc["core"] = ESP.getCoreVersion();                         // NOLINT(readability-static-accessed-through-instance)
+    doc["sketchSize"] = ESP.getSketchSize();                    // NOLINT(readability-static-accessed-through-instance)
 
     String json;
     serializeJson(doc, json);
